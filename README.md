@@ -22,6 +22,26 @@ Pendekatan yang saya gunakan dalam proyek ini mengintegrasikan dua algoritma pem
 2. **Collaborative Filtering**: Algoritma ini mengandalkan pola kesukaan yang ada di komunitas pengguna. Dengan menggunakan informasi rating dari banyak pengguna, sistem ini memberikan rekomendasi film berdasarkan apa yang disukai oleh pengguna lain yang memiliki pola kesukaan serupa, tanpa memerlukan informasi detail tentang film tersebut.
 
 ### Data Understanding
+- **Links dataset**: 
+  - Jumlah baris: 9,742
+  - Jumlah kolom: 3
+  - Dataset ini berisi informasi tentang ID film dan ID eksternal lainnya (misalnya, IMDb ID).
+  
+- **Movies dataset**: 
+  - Jumlah baris: 9,742
+  - Jumlah kolom: 3
+  - Dataset ini berisi ID film, judul, dan genre film.
+
+- **Ratings dataset**: 
+  - Jumlah baris: 100,836
+  - Jumlah kolom: 4
+  - Dataset ini berisi rating yang diberikan oleh pengguna, dengan kolom `movieId`, `userId`, `rating`, dan `timestamp`.
+
+- **Tags dataset**: 
+  - Jumlah baris: 3,683
+  - Jumlah kolom: 4
+  - Dataset ini berisi tag yang diberikan oleh pengguna untuk setiap film, dengan kolom `movieId`, `userId`, `tag`, dan `timestamp`.
+
 **Jumlah Data (Baris dan Kolom)**
 - Terdapat **45.5 ribu baris data** yang mewakili setiap film, dan sejumlah kolom yang mencakup berbagai atribut dari setiap film.
 
@@ -61,18 +81,61 @@ Pendekatan yang saya gunakan dalam proyek ini mengintegrasikan dua algoritma pem
 Proses pertama dalam pengolahan data adalah **Exploratory Data Analysis (EDA)**, di mana saya menganalisis hubungan antar variabel untuk memahami pola dan distribusi data. Setelah itu, saya menggabungkan data berdasarkan **movieId** untuk film dan **userId** untuk pengguna, sehingga informasi terkait film dan rating bisa diintegrasikan.
 
 ### Data Preparation
-Pada tahap Data Preparation ini, terdapat dua pendekatan utama dalam pemrosesan data: **Content-Based Filtering** dan **Collaborative Filtering**. Proses yang dilakukan mencakup pembersihan data, penggabungan data, pengurutan data, dan penghapusan duplikasi. Penjelasan berikut akan dilakukan sesuai dengan urutan dalam notebook.
+#### 1. Penanganan Data Kosong dan Duplikat  
+- Dilakukan pengecekan nilai kosong pada dataset menggunakan metode `isnull().sum()`. Semua baris yang memiliki nilai kosong dihapus menggunakan `dropna()`.  
+- Dataset diurutkan berdasarkan kolom `movieId` secara ascending menggunakan `sort_values()`.  
+- Data duplikat dihapus dengan menggunakan metode `drop_duplicates()` pada kolom `movieId`.
+
+#### 2. Konversi Kolom menjadi List  
+- Kolom `movieId`, `title`, dan `genres` dikonversi menjadi list menggunakan metode `tolist()`.  
+- Data ini kemudian disusun ulang menjadi DataFrame baru dengan nama kolom `id`, `movie_name`, dan `genre`.
+
+#### 3. Encoding `userId` dan `movieId`  
+- Kolom `userId` diubah menjadi list unik menggunakan metode `unique()`. Dilakukan encoding dengan membuat mapping `userId` ke nilai numerik dan sebaliknya.  
+- Kolom `movieId` juga diubah menjadi list unik, lalu dilakukan encoding serupa dengan mapping ke nilai numerik dan sebaliknya.  
+
+#### 4. Mapping Nilai yang Sudah Di-encode ke DataFrame  
+- Hasil encoding `userId` dimasukkan ke kolom `genres`, dan encoding `movieId` dimasukkan ke kolom `movies` pada dataset utama untuk memastikan konsistensi data.
+
+#### 5. Normalisasi Kolom `rating`  
+- Kolom `rating` diubah menjadi tipe data `float32`. Nilai `rating` dinormalisasi menggunakan rumus `(rating - min_rating) / (max_rating - min_rating)`, dengan `min_rating` dan `max_rating` merupakan nilai minimum dan maksimum dari kolom `rating`.
+
+#### 6. Pemrosesan Data dengan TF-IDF  
+- Kolom `genres` diubah menjadi representasi numerik menggunakan teknik TF-IDF (Term Frequency-Inverse Document Frequency).  
+- Teknik ini digunakan untuk memproses teks dalam kolom `genres` agar dapat digunakan dalam model pembelajaran mesin.
+
+#### 7. Pengacakan Dataset  
+- Dataset diacak menggunakan metode `sample(frac=1, random_state=42)` untuk memastikan data terdistribusi secara acak namun tetap dapat direproduksi dengan nilai `random_state`.
+
+#### 8. Pembagian Dataset  
+- Dataset dibagi menjadi data latih dan data validasi. Sebanyak 80% data digunakan sebagai data latih, dan 20% sebagai data validasi.  
+- Pemisahan dilakukan pada variabel fitur (`x`) yang merupakan gabungan kolom `genres` dan `movies`, serta target (`y`) yang merupakan kolom `ratings`. 
+
+#### 9. Ringkasan Data  
+- Jumlah pengguna unik (`userId`): **`num_users`**  
+- Jumlah film unik (`movieId`): **`num_movie`**  
+- Rating minimum: **`min_rating`**  
+- Rating maksimum: **`max_rating`**
+
+#### 10. Dataset Siap untuk Model  
+Setelah proses di atas, dataset telah siap untuk digunakan dalam pembuatan model pembelajaran mesin dengan data yang telah dibersihkan, diencoding, dinormalisasi, serta dibagi untuk data latih dan data validasi.
+
+Pada tahap Data Preparation ini, terdapat dua pendekatan utama dalam pemrosesan data: **Content-Based Filtering** dan **Collaborative Filtering**. Proses yang dilakukan mencakup pembersihan data, penggabungan data, pengurutan data, dan penghapusan duplikasi. 
 
 ### 1. Content-Based Filtering
 
 #### Menggabungkan Data
 Proses pertama yang dilakukan adalah menggabungkan data berdasarkan ID unik. Data yang digunakan adalah dataset yang berisi informasi tentang film dan rating yang diberikan oleh pengguna.
 
-```python
-all_movie_clean = all_movie.dropna()
-```
 
-Pada tahap ini, data yang telah digabungkan akan diperiksa apakah terdapat missing values. Kolom `tag` memiliki 52,549 nilai kosong, yang kemudian dihapus menggunakan fungsi `dropna()`.
+```python
+movie_all = np.concatenate((
+    links.movieId.unique(),
+    movies.movieId.unique(),
+    ratings.movieId.unique(),
+    tags.movieId.unique(),
+))
+```
 
 #### Mengatasi Missing Values
 Setelah menggabungkan data, langkah selanjutnya adalah memeriksa missing values dalam dataset. Kolom yang ditemukan memiliki missing value adalah kolom `tag`, dan langkah yang dilakukan adalah menghapus baris yang memiliki nilai kosong.
@@ -169,89 +232,59 @@ Dataset `movie_new` ini terdiri dari 1,554 baris dan 3 kolom, yaitu `id`, `movie
 Pada tahap Data Preparation ini, dilakukan serangkaian langkah untuk mempersiapkan data, baik untuk **Content-Based Filtering** maupun **Collaborative Filtering**. Proses yang dilakukan meliputi pembersihan data, pengurutan, penghapusan duplikasi, konversi data ke dalam format yang lebih efisien, dan pembuatan struktur data yang siap digunakan dalam model rekomendasi. Dengan data yang sudah siap, tahap berikutnya adalah memulai pemodelan menggunakan kedua pendekatan tersebut.
 
 ### Model Development and Results
-Pada tahap ini, kita akan membahas pengembangan model untuk memberikan rekomendasi film menggunakan dua pendekatan utama: **Content-Based Filtering** dan **Collaborative Filtering**. Berikut adalah tahapan pengembangan model dan penjelasan mengenai parameter yang digunakan.
+#### **1. Content-Based Filtering**
 
-#### 1. **Content-Based Filtering**
+Pendekatan Content-Based Filtering digunakan untuk memberikan rekomendasi film berdasarkan genre film yang pernah disukai oleh pengguna. 
 
-Untuk model Content-Based Filtering, kita menggunakan **TF-IDF Vectorizer** dari scikit-learn untuk menghitung fitur berdasarkan genre film. Proses ini memetakan genre film ke dalam representasi numerik yang memungkinkan kita untuk menghitung kemiripan antar film berdasarkan genre mereka.
+1. **Representasi Data Genre**  
+   Model memanfaatkan metode TF-IDF (*Term Frequency-Inverse Document Frequency*) untuk merepresentasikan genre film dalam bentuk vektor. Setiap genre dalam dataset diubah menjadi nilai-nilai bobot yang menunjukkan pentingnya setiap genre dalam data film tersebut. TF-IDF Vectorizer mengidentifikasi 24 fitur unik yang merepresentasikan genre di dalam dataset ini, termasuk genre seperti 'action', 'comedy', 'fantasy', dan lainnya.
 
-##### **Langkah-langkah:**
+2. **Pengukuran Kemiripan Antar Film**  
+   Setelah data genre diubah menjadi vektor, model menghitung kemiripan antar film menggunakan *cosine similarity*. Hasilnya adalah sebuah matriks berukuran 1554 x 1554, di mana setiap elemen matriks menunjukkan nilai kemiripan antara sepasang film berdasarkan genre mereka. Nilai kemiripan berkisar antara 0 (tidak mirip sama sekali) hingga 1 (sangat mirip).
 
-1. **Inisialisasi TfidfVectorizer**
-   
-   TfidfVectorizer digunakan untuk mengubah genre teks menjadi representasi vektor numerik. Model ini menghitung bobot **term frequency-inverse document frequency (TF-IDF)** dari setiap genre dalam data.
+3. **Penyusunan Rekomendasi**  
+   Berdasarkan matriks kemiripan, model mengambil lima film dengan skor kemiripan tertinggi sebagai rekomendasi. Model juga memastikan bahwa film yang direkomendasikan tidak termasuk film awal yang digunakan sebagai input.  
 
-   ```python
-   tf = TfidfVectorizer()
-   ```
-
-   Parameter default digunakan untuk **TfidfVectorizer** tanpa perlu penyesuaian khusus.
-
-2. **Menerapkan TF-IDF pada Genre**
-   
-   Setelah inisialisasi, kita menerapkan **fit** dan **transform** pada kolom genre dari dataset untuk mendapatkan representasi numerik.
-
-   ```python
-   tfidf_matrix = tf.fit_transform(movie_new['genre'])
-   ```
-
-3. **Menghitung Cosine Similarity**
-   
-   Untuk mengukur kemiripan antara film-film berdasarkan genre, kita menggunakan **cosine similarity** yang mengukur sejauh mana dua vektor genre serupa.
-
-   ```python
-   from sklearn.metrics.pairwise import cosine_similarity
-   cosine_sim = cosine_similarity(tfidf_matrix)
-   ```
-
-   Outputnya adalah matriks **cosine similarity** yang menunjukkan seberapa mirip satu film dengan film lainnya berdasarkan genre mereka. Matriks ini memiliki dimensi 1554x1554, yang berarti ada 1554 film yang dibandingkan satu sama lain.
-
-4. **Rekomendasi Film**
-   
-   Berdasarkan matriks cosine similarity, kita dapat membuat rekomendasi untuk sebuah film dengan mencari film yang memiliki kemiripan tertinggi. Fungsi berikut mengembalikan film yang paling mirip dengan film yang diberikan:
-
-   ```python
-   def movie_recommendations(nama_movie, similarity_data=cosine_sim_df, items=movie_new[['movie_name', 'genre']], k=5):
-       index = similarity_data.loc[:,nama_movie].to_numpy().argpartition(range(-1, -k, -1))
-       closest = similarity_data.columns[index[-1:-(k+2):-1]]
-       closest = closest.drop(nama_movie, errors='ignore')
-       return pd.DataFrame(closest).merge(items).head(k)
-   ```
     ![output-cbf-1user](https://github.com/user-attachments/assets/23efadf2-a231-4013-8306-bd7b25e811c6)
 
    Sebagai contoh, rekomendasi untuk film "Jumanji (1995)" menghasilkan film-film dengan genre yang sama, seperti:
 
    ![output-cbf-2recommend](https://github.com/user-attachments/assets/6e99a0d3-a5fe-4491-989e-1ae97afb72ec)
+   
+**Parameter Model**:  
+- *TF-IDF Vectorizer*: Tidak menggunakan *stopwords* dan menggunakan semua fitur unik yang terdapat pada genre film.
+- *Cosine Similarity*: Digunakan untuk mengukur kesamaan antar film berdasarkan vektor genre yang dihasilkan.
+- Jumlah rekomendasi (*k*): Menyediakan 5 film dengan skor kemiripan tertinggi sebagai rekomendasi.
+
+Hasil rekomendasi menunjukkan bahwa model berhasil menemukan film yang genre-nya serupa, memberikan pengalaman menonton yang sesuai dengan preferensi film awal pengguna.
 
 #### 2. **Collaborative Filtering**
+Pendekatan Collaborative Filtering dilakukan menggunakan model *neural network* berbasis *embedding* untuk memberikan rekomendasi film berdasarkan preferensi pengguna dan film yang pernah mereka nilai. 
 
-Pada pendekatan **Collaborative Filtering**, kita menggunakan dataset rating pengguna untuk memprediksi rating yang diberikan oleh pengguna lain terhadap film yang belum mereka tonton. Pendekatan ini berfokus pada pola interaksi pengguna dan film, tanpa memperhatikan konten film itu sendiri.
-
-##### **Langkah-langkah:**
-
-1. **Persiapan Data**
+1. **Arsitektur Model**  
+   Model ini dirancang dengan menggunakan kelas khusus bernama `RecommenderNet`, yang berisi beberapa lapisan embedding. Lapisan embedding ini memungkinkan model untuk memetakan informasi pengguna dan film ke dalam vektor berdimensi tertentu (embedding) yang dapat membantu menangkap pola kesukaan antar pengguna dan film berdasarkan data rating yang tersedia. Model terdiri dari empat lapisan embedding utama:
    
-   Dataset yang digunakan berisi rating pengguna terhadap film, dengan kolom yang terdiri dari `userId`, `movieId`, `rating`, dan `timestamp`. Data ini berisi lebih dari 100,000 baris, dan setiap baris menunjukkan rating yang diberikan oleh seorang pengguna terhadap sebuah film.
+   - **User Embedding**: Mewakili setiap pengguna dalam bentuk vektor embedding dengan ukuran tertentu (*embedding_size*).
+   - **User Bias**: Lapisan bias untuk pengguna, yang menambahkan nilai bias pada setiap embedding pengguna untuk mengakomodasi perbedaan rata-rata rating antar pengguna.
+   - **Movie Embedding**: Mewakili setiap film dalam bentuk vektor embedding.
+   - **Movie Bias**: Lapisan bias untuk setiap film yang menyesuaikan rating rata-rata tiap film.
 
-   ```python
-   df = ratings
-   ```
-
-2. **Model Matrix Factorization**
+2. **Proses Perhitungan Skor Rekomendasi**  
+   Pada saat pemanggilan (*call*), model menerima input yang berupa pasangan (pengguna, film). Tahapan perhitungan skor rekomendasi dilakukan sebagai berikut:
    
-   Untuk Collaborative Filtering, salah satu metode yang digunakan adalah **Matrix Factorization** dengan menggunakan **SVD** (Singular Value Decomposition). Teknik ini memecah matriks rating menjadi dua matriks kecil yang dapat digunakan untuk prediksi.
+   - Model memanggil embedding dari lapisan `user_embedding` dan `movie_embedding` untuk setiap pasangan pengguna dan film.
+   - Hasil embedding pengguna dan film kemudian dikalikan dengan operasi *dot product* untuk mendapatkan skor awal.
+   - Model menambahkan nilai bias dari `user_bias` dan `movie_bias` ke skor awal untuk menyesuaikan prediksi rating agar lebih akurat.
+   - Aktivasi *sigmoid* digunakan pada hasil akhir untuk membatasi nilai keluaran dalam rentang 0 hingga 1, memberikan perkiraan probabilitas kecocokan antara pengguna dan film.
 
-3. **Membangun Matriks Rating Pengguna-Film**
-
-   Matriks rating pengguna-film disusun dengan `userId` sebagai indeks dan `movieId` sebagai kolom. Rating yang tidak ada diisi dengan nilai nol, yang menunjukkan bahwa pengguna tersebut belum memberikan rating untuk film tersebut.
-
-4. **Prediksi Rating dan Rekomendasi Film**
+3. **Parameter Model**
    
-   Berdasarkan matriks rating, prediksi rating untuk pengguna dan film tertentu dapat dilakukan. Film-film yang memiliki rating tertinggi untuk pengguna yang sama dapat direkomendasikan.
+   - **Jumlah Pengguna** (*num_users*): Jumlah unik pengguna yang terdapat dalam dataset.
+   - **Jumlah Film** (*num_movie*): Jumlah unik film yang terdapat dalam dataset.
+   - **Ukuran Embedding** (*embedding_size*): Ukuran vektor embedding yang dipilih untuk representasi pengguna dan film.  
+   - **Regularisasi L2**: Untuk mengurangi risiko *overfitting*, lapisan embedding diinisialisasi dengan regularisasi L2 sebesar 1e-6. Ini membantu menjaga bobot dalam skala yang stabil.
 
-   **Parameter yang digunakan:**
-   - **k (Jumlah Rekomendasi)**: Jumlah film yang direkomendasikan. Default adalah 5.
-   - **Similarity**: Ukuran kemiripan antara film berdasarkan rating yang diberikan oleh pengguna.
+Model ini memanfaatkan informasi dari seluruh pengguna dan rating yang diberikan untuk menemukan pola umum dalam preferensi pengguna terhadap berbagai film.
 
 #### Hasil Collaborative Filtering
 Sistem juga memberikan rekomendasi berdasarkan rating yang diberikan oleh pengguna lain. Berdasarkan rating tinggi, film dengan genre **Comedy** dan **Drama** muncul sebagai rekomendasi utama.
